@@ -28,12 +28,25 @@ Puede ejecutar múltiples instrucciones SQL, recibir parámetros, manejar errore
 
 Características principales:
 
-- Se almacena en el servidor.  
-- Puede recibir parámetros opcionales u obligatorios.  
-- Puede ejecutar operaciones de lectura y escritura.  
-- Puede contener ciclos, condiciones, variables y bloques TRY/CATCH.  
-- No está obligado a devolver un valor.  
-- Puede ser llamado desde aplicaciones, APIs o desde otros procedimientos.
+---
+
+- **Se almacena en el servidor.**  
+  Esto significa que el procedimiento no vive en un archivo externo ni en la aplicación, sino dentro del propio motor de base de datos. El servidor lo conserva, lo compila, lo optimiza y lo ejecuta cuando se le solicita. Esto garantiza disponibilidad, consistencia y rendimiento, porque la lógica está físicamente cerca de los datos.
+
+- **Puede recibir parámetros opcionales u obligatorios.**  
+  Los parámetros permiten que el mismo procedimiento se ejecute con diferentes valores sin reescribir código. Algunos pueden ser obligatorios (por ejemplo, una cédula), mientras que otros pueden tener valores por defecto, lo que permite ejecutar el procedimiento incluso si no se especifican todos los argumentos.
+
+- **Puede ejecutar operaciones de lectura y escritura.**  
+  Un procedimiento puede consultar datos (SELECT), insertar (INSERT), modificar (UPDATE) o eliminar (DELETE). Esta capacidad lo convierte en una herramienta central para encapsular reglas de negocio y controlar cómo se manipula la información dentro del sistema.
+
+- **Puede contener ciclos, condiciones, variables y bloques TRY/CATCH.**  
+  Los procedimientos permiten programar lógica completa: repetir acciones con WHILE, tomar decisiones con IF/ELSE, almacenar valores temporales en variables y manejar errores con TRY/CATCH. Esto los convierte en unidades de programación completas dentro del motor.
+
+- **No está obligado a devolver un valor.**  
+  A diferencia de las funciones, un procedimiento puede ejecutar acciones sin retornar un resultado formal. Puede imprimir mensajes, modificar datos o realizar validaciones sin necesidad de producir un valor final. Esto lo hace flexible para tareas operativas.
+
+- **Puede ser llamado desde aplicaciones, APIs o desde otros procedimientos.**  
+  Los procedimientos pueden integrarse en cualquier capa del sistema. Una aplicación web, una API, un servicio backend o incluso otro procedimiento pueden invocarlo. Esto permite construir arquitecturas modulares donde la base de datos expone operaciones controladas y reutilizables.
 
 En SQL Server se crea con:
 
@@ -45,6 +58,8 @@ BEGIN
 END
 ```
 
+Las funciones se crean de manera similar. 
+
 ---
 
 ## 2.2 Función
@@ -52,10 +67,19 @@ END
 Una **función** es un bloque de código que recibe parámetros y devuelve un valor.  
 A diferencia de los procedimientos:
 
-- Debe devolver un valor (escalar o tabla).  
-- No puede modificar datos en SQL Server.  
-- Se usa dentro de consultas, SELECT, WHERE, JOIN, etc.  
-- Es ideal para cálculos, transformaciones y validaciones.
+- **Debe devolver un valor (escalar o tabla).**  
+  Una función siempre produce un resultado final: un número, una cadena, una fecha o incluso una tabla completa. Ese valor puede usarse inmediatamente dentro de una consulta. Esta obligación de devolver algo la convierte en una herramienta ideal para cálculos y transformaciones que deben integrarse directamente en el flujo de una sentencia SQL.
+
+- **No puede modificar datos en SQL Server.**  
+  Las funciones están diseñadas para ser deterministas y seguras dentro de una consulta. Por eso no pueden ejecutar INSERT, UPDATE o DELETE. Su propósito es calcular, transformar o evaluar, no alterar el estado de la base de datos. Esta restricción garantiza que puedan usarse sin riesgo dentro de SELECT, JOIN o WHERE.
+
+- **Se usa dentro de consultas, SELECT, WHERE, JOIN, etc.**  
+  A diferencia de los procedimientos, las funciones pueden integrarse como parte de una expresión. Pueden aparecer en un SELECT para calcular un valor, en un WHERE para filtrar, en un JOIN para relacionar datos o incluso en un ORDER BY. Esto las convierte en componentes reutilizables dentro del lenguaje declarativo.
+
+- **Es ideal para cálculos, transformaciones y validaciones.**  
+  Las funciones encapsulan lógica que se repite: formatear textos, calcular edades, validar rangos, transformar fechas, normalizar valores, etc. Son especialmente útiles cuando la misma operación debe ejecutarse en múltiples consultas, garantizando consistencia y evitando duplicación de código.
+
+---
 
 Ejemplo conceptual:
 
@@ -102,12 +126,24 @@ La API valida permisos, aplica reglas de negocio y evita exponer el servidor dir
 
 ## 2.4 ¿Por qué existen los procedimientos y funciones?
 
-- Para **reutilizar lógica** sin reescribir código.  
-- Para **centralizar reglas de negocio** dentro de la base de datos.  
-- Para **mejorar rendimiento**, reduciendo viajes entre aplicación y servidor.  
-- Para **proteger la base de datos**, controlando qué operaciones están permitidas.  
-- Para **mantener consistencia** en operaciones repetitivas.  
-- Para **automatizar tareas** que deben ejecutarse de forma controlada.
+
+- **Para reutilizar lógica sin reescribir código.**  
+  Cuando una operación se repite en distintos lugares del sistema, encapsularla en un procedimiento o función evita duplicación y reduce errores. En lugar de copiar y pegar la misma instrucción en múltiples consultas o módulos, se centraliza en un solo lugar. Esto facilita mantenimiento, actualizaciones y coherencia en el comportamiento del sistema.
+
+- **Para centralizar reglas de negocio dentro de la base de datos.**  
+  Las reglas que determinan cómo debe operar un proceso (validaciones, restricciones, cálculos, condiciones) pueden residir en la base de datos en lugar de dispersarse en distintas aplicaciones. Esto garantiza que, sin importar desde dónde se invoque la operación, la lógica se ejecuta de manera uniforme y controlada.
+
+- **Para mejorar rendimiento, reduciendo viajes entre aplicación y servidor.**  
+  Ejecutar varias operaciones dentro de un procedimiento evita enviar múltiples instrucciones desde la aplicación. En lugar de varios viajes de ida y vuelta, el servidor recibe una sola llamada y ejecuta todo internamente. Esto disminuye latencia, reduce carga en la red y mejora tiempos de respuesta.
+
+- **Para proteger la base de datos, controlando qué operaciones están permitidas.**  
+  En lugar de dar acceso directo a tablas, se otorgan permisos para ejecutar procedimientos específicos. Esto limita lo que un usuario o una aplicación puede hacer, evitando modificaciones indebidas y reduciendo riesgos de seguridad. Los procedimientos actúan como una capa de control entre el usuario y los datos.
+
+- **Para mantener consistencia en operaciones repetitivas.**  
+  Si una operación debe ejecutarse siempre de la misma manera (por ejemplo, insertar un registro con validaciones previas), un procedimiento garantiza que el proceso no varíe según quién lo ejecute o desde qué aplicación se invoque. Esto evita errores humanos y asegura uniformidad en los resultados.
+
+- **Para automatizar tareas que deben ejecutarse de forma controlada.**  
+  Procesos como auditorías, cálculos periódicos, limpiezas de datos o transformaciones pueden encapsularse en procedimientos que se ejecutan manualmente o mediante programación. Esto permite que tareas complejas se realicen de forma predecible, ordenada y sin intervención constante del usuario.
 
 ---
 
