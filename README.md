@@ -1,5 +1,5 @@
 
-# TTdBBdDD — Tópicos de Bases de Datos
+# TTdBBdDD — Tópicos de Bases de Datos - Por Olinto Rodríguez-Atencio
 
 Este repositorio contiene el material oficial de la asignatura **Tópicos de Bases de Datos**, organizado como un **mini‑libro digital** en formato Markdown.  
 Su objetivo es ofrecer un espacio claro, didáctico y estructurado donde los estudiantes puedan estudiar, practicar y descargar el contenido, manteniendo la integridad del material mediante acceso de solo lectura.
