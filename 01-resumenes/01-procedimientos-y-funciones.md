@@ -1,7 +1,3 @@
- Perfecto, Olinto. Vamos a reorganizar el capítulo para que el **punto sobre datos de conexión** aparezca temprano, dentro de los **conceptos fundamentales**, y además voy a **extender cada punto** con una narrativa más clara, didáctica y profunda, manteniendo tu estilo editorial.
-
-Aquí tienes el **Markdown completo, limpio y sin íconos**, listo para tu repositorio **TTdBBdDD**.
-
 ---
 
 # Procedimientos y Funciones en SQL  
