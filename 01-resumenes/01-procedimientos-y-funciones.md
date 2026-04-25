@@ -90,6 +90,9 @@ AS
 BEGIN
     RETURN @a + @b;
 END
+GO
+
+
 ```
 
 ---
@@ -178,6 +181,20 @@ create or alter procedure sp_prueba as
 begin
     print('Hola')
 end
+go
+
+exec sp_prueba
+go
+
+-- Va igual, pero con parámetros, atender a las llamadas.
+create or alter procedure sp_prueba (@mensaje varchar(20) = 'Nada') as  
+begin
+    print('Hola, ' + @mensaje )
+end
+go
+
+
+exec sp_prueba @mensaje= 'Villalobos'
 go
 
 exec sp_prueba
