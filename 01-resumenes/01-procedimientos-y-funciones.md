@@ -443,10 +443,13 @@ Permite contrastar diferencias en procedimientos, funciones y manejo de errores 
 TAREA 02 - PROCEDIMIENTOS EN SQL - APELLIDOS Y NOMBRES COMPLETOS DEL ALUMNO EN MAYÚSCULA
 
 Ejemplo:  
-PEREZ BONALDE, JUAN ANTONIO
+TAREA 02 - PROCEDIMIENTOS EN SQL - PEREZ BONALDE, JUAN ANTONIO
 
 **Nombre del archivo:**  
 TAREA 02 - PROCEDIMIENTOS EN SQL - APELLIDOS Y NOMBRES COMPLETOS DEL ALUMNO EN MAYÚSCULA.sql
+
+Ejemplo:  
+TAREA 02 - PROCEDIMIENTOS EN SQL - PEREZ BONALDE, JUAN ANTONIO.sql
 
 Enviar el script al correo electrónico indicado en la sesión de clases.
 
