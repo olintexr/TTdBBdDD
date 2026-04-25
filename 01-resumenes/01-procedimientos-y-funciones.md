@@ -324,7 +324,7 @@ go
 
 ```sql
 CREATE OR ALTER PROCEDURE sp_evaluar_numero
-    @numero INT
+    @numero  INT = 777
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -343,6 +343,8 @@ go
 exec sp_evaluar_numero -99
 go 
 exec sp_evaluar_numero 0
+go
+exec sp_evaluar_numero 
 go
 ```
 
@@ -364,8 +366,10 @@ BEGIN
         END
         ELSE
         BEGIN
-            PRINT 'No se encontró una persona con la cédula especificada.';
+            PRINT 'No se encontró una persona con la cédula especificada: ' + CAST ( @cedula_p AS VARCHAR (10));
         END
+		-- QUITAR EL PRÓXIMO COMENTARIO PARA QUE FALLE
+		-- PRINT 1/0
     END TRY
 
     BEGIN CATCH
