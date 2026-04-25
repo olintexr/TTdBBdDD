@@ -257,10 +257,10 @@ go
 EXEC sp_insertar_persona 12345678, 'Juan Pérez', '2020-10-25'; -- error por duplicación
 go
 
-EXEC sp_insertar_persona 12345679, 'Andrea Carter', '2020-10-25';
+EXEC sp_insertar_persona 12345679, 'Andrea Carter', '2020-11-25';
 go
 
-EXEC sp_insertar_persona 33345679, 'Tony Stark', '2000-10-25';
+EXEC sp_insertar_persona 33345679, 'Tony Stark', '2000-12-25';
 go
 
 EXEC sp_insertar_persona 99345679, 'Natasha Romanoff', '1990-11-20';
@@ -287,11 +287,14 @@ BEGIN
         PRINT 'Valor actual: ' + CAST(@i AS VARCHAR(10));
         SET @i = @i + 1;
     END
+	PRINT '_____________ Valor máximo ' + CAST(@maximo as VARCHAR(10))
 END
 GO
 
 exec sp_ciclo_simple
 go
+
+exec sp_ciclo_simple @maximo = 3 
 ```
 
 ### Números pares
