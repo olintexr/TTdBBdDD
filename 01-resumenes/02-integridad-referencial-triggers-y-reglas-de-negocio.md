@@ -1,5 +1,3 @@
----
-
 # 02 – Integridad referencial, triggers y reglas de negocio
 
 ## 1. Idea central
