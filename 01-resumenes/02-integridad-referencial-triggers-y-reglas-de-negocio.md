@@ -429,31 +429,52 @@ ORDER BY e.nombre_empleado;
 *(Código completo)*
 
 ```sql
-CREATE TRIGGER TR_Chk_Activos_Navacerrada
+CREATE OR ALTER TRIGGER TR_Chk_Activos_Navacerrada
 ON dbo.Prestamo
 AFTER INSERT, UPDATE, DELETE
 AS
 BEGIN
     SET NOCOUNT ON;
 
+    DECLARE @SucursalID INT;
     DECLARE @activos DECIMAL(16,2);
     DECLARE @suma_prestamos DECIMAL(16,2);
 
-    SELECT @activos = activos
+    ----------------------------------------------------------
+    -- 1. Obtener el SucursalID de Navacerrada
+    ----------------------------------------------------------
+    SELECT @SucursalID = SucursalID
     FROM dbo.Sucursal
     WHERE nombre_sucursal = N'Navacerrada';
 
+    IF @SucursalID IS NULL
+        RETURN;  -- No existe la sucursal, no hay nada que validar
+
+    ----------------------------------------------------------
+    -- 2. Obtener los activos actuales de la sucursal
+    ----------------------------------------------------------
+    SELECT @activos = activos
+    FROM dbo.Sucursal
+    WHERE SucursalID = @SucursalID;
+
+    ----------------------------------------------------------
+    -- 3. Calcular la suma total de préstamos de esa sucursal
+    ----------------------------------------------------------
     SELECT @suma_prestamos = SUM(monto)
     FROM dbo.Prestamo
-    WHERE nombre_sucursal = N'Navacerrada';
+    WHERE SucursalID = @SucursalID;
 
-    IF @activos <> @suma_prestamos
+    ----------------------------------------------------------
+    -- 4. Validar la igualdad
+    ----------------------------------------------------------
+    IF @activos <> ISNULL(@suma_prestamos, 0)
     BEGIN
         RAISERROR (
-          N'Error: los activos de la sucursal Navacerrada no coinciden con la suma de sus préstamos.',
-          16, 1
+            N'Error: los activos de la sucursal Navacerrada no coinciden con la suma de sus préstamos.',
+            16, 1
         );
         ROLLBACK TRANSACTION;
+        RETURN;
     END
 END;
 GO
