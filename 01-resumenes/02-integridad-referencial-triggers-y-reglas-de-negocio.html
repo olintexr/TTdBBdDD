@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>02 &ndash; Integridad referencial&comma; CHECK y triggers con inserted&sol;deleted</title>
+            <style>
+/* From extension vscode.github */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.vscode-dark img[src$=\#gh-light-mode-only],
+.vscode-light img[src$=\#gh-dark-mode-only],
+.vscode-high-contrast:not(.vscode-high-contrast-light) img[src$=\#gh-light-mode-only],
+.vscode-high-contrast-light img[src$=\#gh-dark-mode-only] {
+	display: none;
+}
+
+</style>
+            
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item {
+    list-style-type: none;
+}
+
+.task-list-item-checkbox {
+    margin-left: -20px;
+    vertical-align: middle;
+    pointer-events: none;
+}
+</style>
+<style>
+:root {
+  --color-note: #0969da;
+  --color-tip: #1a7f37;
+  --color-warning: #9a6700;
+  --color-severe: #bc4c00;
+  --color-caution: #d1242f;
+  --color-important: #8250df;
+}
+
+</style>
+<style>
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-note: #2f81f7;
+    --color-tip: #3fb950;
+    --color-warning: #d29922;
+    --color-severe: #db6d28;
+    --color-caution: #f85149;
+    --color-important: #a371f7;
+  }
+}
+
+</style>
+<style>
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: .25em solid #888;
+}
+
+.markdown-alert>:first-child {
+  margin-top: 0
+}
+
+.markdown-alert>:last-child {
+  margin-bottom: 0
+}
+
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: 500;
+  align-items: center;
+  line-height: 1
+}
+
+.markdown-alert .markdown-alert-title .octicon {
+  margin-right: 0.5rem;
+  display: inline-block;
+  overflow: visible !important;
+  vertical-align: text-bottom;
+  fill: currentColor;
+}
+
+.markdown-alert.markdown-alert-note {
+  border-left-color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-important {
+  border-left-color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-warning {
+  border-left-color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-tip {
+  border-left-color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-caution {
+  border-left-color: var(--color-caution);
+}
+
+.markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--color-caution);
+}
+
+</style>
+        
+        </head>
+        <body class="vscode-body vscode-light">
+            <h1 id="02--integridad-referencial-check-y-triggers-con-inserteddeleted">02 – Integridad referencial, CHECK y triggers con inserted/deleted</h1>
+<h2 id="1-objetivo-del-capítulo">1. Objetivo del capítulo</h2>
+<p>En este capítulo se muestra, paso a paso, cómo:</p>
+<ul>
+<li>Definir una base de datos de ejemplo.</li>
+<li>Crear tablas relacionadas con integridad referencial.</li>
+<li>Usar restricciones <code>CHECK</code> y valores por defecto.</li>
+<li>Provocar errores controlados (reglas declarativas).</li>
+<li>Definir triggers de <code>INSERT</code>, <code>UPDATE</code> y <code>DELETE</code>.</li>
+<li>Explicar el uso de las tablas virtuales <code>inserted</code> y <code>deleted</code>.</li>
+<li>Implementar una regla de negocio con un trigger sobre <code>Factura</code>.</li>
+</ul>
+<p>Todo el contenido se basa en el siguiente script, organizado y comentado.</p>
+<hr>
+<h2 id="2-creación-de-la-base-de-datos-y-limpieza-inicial">2. Creación de la base de datos y limpieza inicial</h2>
+<pre><code class="language-sql"><span class="hljs-keyword">CREATE</span> DATABASE REGLAS_DB
+GO
+
+USE REGLAS_DB 
+GO
+
+IF OBJECT_ID(<span class="hljs-string">&#x27;dbo.Factura&#x27;</span>, <span class="hljs-string">&#x27;U&#x27;</span>) <span class="hljs-keyword">IS</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DROP</span> <span class="hljs-keyword">TABLE</span> dbo.Factura;
+IF OBJECT_ID(<span class="hljs-string">&#x27;dbo.Cliente&#x27;</span>, <span class="hljs-string">&#x27;U&#x27;</span>) <span class="hljs-keyword">IS</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DROP</span> <span class="hljs-keyword">TABLE</span> dbo.Cliente;
+GO
+</code></pre>
+<p><strong>Comentarios clave:</strong></p>
+<ul>
+<li>Se crea la base de datos <code>REGLAS_DB</code> y se selecciona con <code>USE</code>.</li>
+<li>Se eliminan las tablas <code>Factura</code> y <code>Cliente</code> si existen, para garantizar un entorno limpio y reproducible.</li>
+</ul>
+<hr>
+<h2 id="3-tabla-cliente">3. Tabla Cliente</h2>
+<pre><code class="language-sql"><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> dbo.Cliente (
+    ClienteID <span class="hljs-type">INT</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">PRIMARY</span> KEY,
+    nombre NVARCHAR(<span class="hljs-number">50</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">UNIQUE</span>
+);
+GO
+</code></pre>
+<p><strong>Puntos importantes:</strong></p>
+<ul>
+<li><code>ClienteID</code> es clave primaria manual (no es IDENTITY).</li>
+<li><code>nombre</code> es obligatorio (<code>NOT NULL</code>) y único (<code>UNIQUE</code>), evitando clientes duplicados por nombre.</li>
+</ul>
+<hr>
+<h2 id="4-tabla-factura-con-check-default-y-foreign-key">4. Tabla Factura con CHECK, DEFAULT y FOREIGN KEY</h2>
+<pre><code class="language-sql"><span class="hljs-comment">-- Tabla Factura: almacena encabezados de facturas emitidas</span>
+<span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> dbo.Factura (
+    
+    <span class="hljs-comment">-- Clave primaria manual; no es IDENTITY</span>
+    FacturaID <span class="hljs-type">INT</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">PRIMARY</span> KEY,
+
+    <span class="hljs-comment">-- Cliente al que pertenece la factura; debe existir en dbo.Cliente</span>
+    ClienteID <span class="hljs-type">INT</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,
+
+    <span class="hljs-comment">-- Monto total de la factura; no puede ser negativo</span>
+    <span class="hljs-comment">-- Esto quiere decir que cualquier insert o update que intente poner &quot;total&quot; en negativo, va a fallar</span>
+    total <span class="hljs-type">DECIMAL</span>(<span class="hljs-number">12</span>,<span class="hljs-number">2</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">CHECK</span> (total <span class="hljs-operator">&gt;=</span> <span class="hljs-number">0</span>),
+
+    <span class="hljs-comment">-- Fecha de emisión; si no se especifica, usa la fecha actual del servidor</span>
+    fecha <span class="hljs-type">DATE</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> GETDATE(),
+
+    <span class="hljs-comment">-- Integridad referencial: cada factura debe apuntar a un cliente válido</span>
+    <span class="hljs-keyword">CONSTRAINT</span> FK_Factura_Cliente <span class="hljs-keyword">FOREIGN</span> KEY (ClienteID)
+        <span class="hljs-keyword">REFERENCES</span> dbo.Cliente(ClienteID)
+
+<span class="hljs-comment">/*
+-- Si intentan borrar/actualizar el cliente no hagas nada si tiene hijos en factura
+CONSTRAINT FK_Factura_Cliente FOREIGN KEY (ClienteID)
+    REFERENCES dbo.Cliente(ClienteID)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION;
+*/</span>
+
+<span class="hljs-comment">/*
+-- Si borran/actualizan el cliente, borra también la factura
+ON DELETE CASCADE
+ON UPDATE CASCADE
+*/</span>
+
+<span class="hljs-comment">/*
+-- Si borran/actualizan el cliente, deja el cliente de factura en null
+-- Para que esto tenga efecto, el campo cliente en factura debe aceptar valores null
+ON DELETE SET NULL
+ON UPDATE SET NULL
+*/</span>
+
+<span class="hljs-comment">/*
+-- Si borran/actualizan el cliente, pon el valor por defecto en el cliente de factura
+ON DELETE SET DEFAULT
+ON UPDATE SET DEFAULT
+*/</span>
+);
+GO
+</code></pre>
+<p><strong>Conceptos:</strong></p>
+<ul>
+<li><code>CHECK (total &gt;= 0)</code> impide totales negativos en <code>INSERT</code> y <code>UPDATE</code>.</li>
+<li><code>DEFAULT GETDATE()</code> asigna la fecha del sistema si no se especifica <code>fecha</code>.</li>
+<li><code>FOREIGN KEY (ClienteID)</code> garantiza que toda factura apunte a un cliente existente.</li>
+<li>En los comentarios se muestran las variantes de comportamiento de la clave foránea:
+<ul>
+<li><code>NO ACTION</code></li>
+<li><code>CASCADE</code></li>
+<li><code>SET NULL</code></li>
+<li><code>SET DEFAULT</code></li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2 id="5-inserción-y-validación-de-datos-en-cliente-y-factura">5. Inserción y validación de datos en Cliente y Factura</h2>
+<h3 id="51-inserción-de-clientes">5.1 Inserción de clientes</h3>
+<pre><code class="language-sql"><span class="hljs-comment">-- Inserción de algunos clientes</span>
+<span class="hljs-keyword">Insert</span> <span class="hljs-keyword">into</span> dbo.Cliente <span class="hljs-keyword">values</span> (<span class="hljs-number">1</span>, <span class="hljs-string">&#x27;Olinto&#x27;</span>), (<span class="hljs-number">2</span>, <span class="hljs-string">&#x27;Aaron&#x27;</span>), (<span class="hljs-number">3</span>, <span class="hljs-string">&#x27;Gustavo&#x27;</span>)
+GO
+
+<span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> dbo.Cliente
+GO
+</code></pre>
+<h3 id="52-intentos-de-inserción-de-facturas-incorrectas">5.2 Intentos de inserción de facturas incorrectas</h3>
+<pre><code class="language-sql"><span class="hljs-comment">-- Intento de inserción de facturas incorrectas</span>
+<span class="hljs-comment">-- (Total negativo)</span>
+<span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> dbo.Factura <span class="hljs-keyword">VALUES</span> (<span class="hljs-number">1</span>, <span class="hljs-number">80</span>, <span class="hljs-number">-100</span>, GETDATE() )
+GO
+
+<span class="hljs-comment">-- Intento de inserción de facturas incorrectas</span>
+<span class="hljs-comment">-- (Cliente no está)</span>
+<span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> dbo.Factura <span class="hljs-keyword">VALUES</span> (<span class="hljs-number">1</span>, <span class="hljs-number">80</span>, <span class="hljs-number">100</span>, GETDATE() )
+GO
+</code></pre>
+<p><strong>Qué se espera:</strong></p>
+<ul>
+<li>El primer <code>INSERT</code> falla por el <code>CHECK (total &gt;= 0)</code>.</li>
+<li>El segundo <code>INSERT</code> falla por la <code>FOREIGN KEY</code> (cliente 80 no existe).</li>
+</ul>
+<h3 id="53-inserción-correcta">5.3 Inserción correcta</h3>
+<pre><code class="language-sql"><span class="hljs-comment">-- Intento de inserción de factura correcta</span>
+<span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> dbo.Factura <span class="hljs-keyword">VALUES</span> (<span class="hljs-number">1</span>, <span class="hljs-number">1</span>, <span class="hljs-number">100</span>, GETDATE() )
+GO
+
+<span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> dbo.Factura
+GO
+</code></pre>
+<h3 id="54-actualización-errónea-check">5.4 Actualización errónea (CHECK)</h3>
+<pre><code class="language-sql"><span class="hljs-comment">-- Intento de actualización errónea (valor negativo)</span>
+<span class="hljs-keyword">UPDATE</span> dbo.Factura <span class="hljs-keyword">SET</span> total <span class="hljs-operator">=</span> <span class="hljs-number">-10</span> <span class="hljs-keyword">WHERE</span> FacturaID <span class="hljs-operator">=</span> <span class="hljs-number">1</span>
+GO
+
+<span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> dbo.Factura
+GO
+</code></pre>
+<p><strong>Resultado esperado:</strong></p>
+<ul>
+<li>El <code>UPDATE</code> falla por violar el <code>CHECK (total &gt;= 0)</code>.</li>
+</ul>
+<h3 id="55-intento-de-borrar-un-cliente-con-facturas">5.5 Intento de borrar un cliente con facturas</h3>
+<pre><code class="language-sql"><span class="hljs-comment">-- intento de borrar el cliente que está en la factura</span>
+<span class="hljs-keyword">DELETE</span> <span class="hljs-keyword">FROM</span> dbo.Cliente <span class="hljs-keyword">WHERE</span> ClienteID <span class="hljs-operator">=</span> <span class="hljs-number">1</span>
+GO
+</code></pre>
+<p>Con la configuración actual (sin <code>ON DELETE CASCADE</code>), esta operación debe fallar por integridad referencial.</p>
+<h3 id="56-inserción-de-factura-sin-fecha-uso-de-default">5.6 Inserción de factura sin fecha (uso de DEFAULT)</h3>
+<pre><code class="language-sql"><span class="hljs-comment">-- Inserción de factura SIN FECHA (Tomará la del sistema)</span>
+<span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> [dbo].[Factura]
+           ([FacturaID]
+           ,[ClienteID]
+           ,[total])
+     <span class="hljs-keyword">VALUES</span>
+           (<span class="hljs-number">2</span>
+           ,<span class="hljs-number">2</span>
+           ,<span class="hljs-number">2000</span>)
+GO
+
+<span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> Factura
+GO 
+</code></pre>
+<p><strong>Punto clave:</strong></p>
+<ul>
+<li>La columna <code>fecha</code> toma automáticamente <code>GETDATE()</code> gracias al <code>DEFAULT</code>.</li>
+</ul>
+<hr>
+<h2 id="6-explicación-de-triggers-e-inserteddeleted">6. Explicación de triggers e inserted/deleted</h2>
+<pre><code class="language-sql"><span class="hljs-comment">/*
+Un trigger es un objeto que SQL Server ejecuta automáticamente cuando ocurre un INSERT, UPDATE o DELETE sobre una tabla. 
+Dentro del trigger, el motor expone dos tablas virtuales: inserted y deleted. 
+Estas no existen físicamente, pero contienen las filas afectadas por la operación. 
+En un INSERT, inserted trae las filas nuevas; en un DELETE, deleted trae las filas eliminadas; 
+En un UPDATE, deleted contiene los valores anteriores mientras inserted contiene los valores nuevos. 
+Como SQL Server procesa operaciones por conjuntos, ambas pueden tener varias filas, 
+y por eso los triggers deben escribirse siempre pensando en conjuntos y no en una sola fila.
+
+-- Evento: este trigger se ejecuta cuando ocurre un INSERT, UPDATE o DELETE,
+-- según cómo haya sido definido.
+--
+-- Tablas virtuales disponibles dentro del trigger:
+--   inserted : contiene las filas nuevas (INSERT) o los valores nuevos (UPDATE).
+--   deleted  : contiene las filas eliminadas (DELETE) o los valores anteriores (UPDATE).
+--
+-- En INSERT solo existe inserted.
+-- En DELETE solo existe deleted.
+-- En UPDATE existen ambas: deleted = valores viejos, inserted = valores nuevos.
+*/</span>
+</code></pre>
+<hr>
+<h2 id="7-triggers-sobre-cliente">7. Triggers sobre Cliente</h2>
+<h3 id="71-trigger-de-insert-en-cliente">7.1 Trigger de INSERT en Cliente</h3>
+<pre><code class="language-sql"><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">OR</span> <span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TRIGGER</span> TR_Cliente_Insert
+<span class="hljs-keyword">ON</span> dbo.Cliente
+AFTER <span class="hljs-keyword">INSERT</span>
+<span class="hljs-keyword">AS</span>
+<span class="hljs-keyword">BEGIN</span>
+    <span class="hljs-keyword">SET</span> NOCOUNT <span class="hljs-keyword">ON</span>;
+
+    <span class="hljs-comment">-- Evento: INSERT</span>
+    <span class="hljs-comment">-- Tabla virtual disponible: inserted (contiene las filas nuevas)</span>
+
+    <span class="hljs-keyword">SELECT</span> 
+        <span class="hljs-string">&#x27;Cliente insertado&#x27;</span> <span class="hljs-keyword">AS</span> evento,
+        i.ClienteID,
+        i.nombre
+    <span class="hljs-keyword">FROM</span> inserted i;
+<span class="hljs-keyword">END</span>;
+GO
+
+<span class="hljs-comment">-- Este insert llamará al trigger de insert de la tabla de clientes</span>
+<span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> Cliente(ClienteID, nombre) <span class="hljs-keyword">VALUES</span> (<span class="hljs-number">4</span>,<span class="hljs-string">&#x27;Pedrito&#x27;</span>)
+GO
+</code></pre>
+<p><strong>Idea didáctica:</strong></p>
+<ul>
+<li>Cada vez que se inserta un cliente, el trigger muestra las filas de <code>inserted</code>.</li>
+</ul>
+<hr>
+<h3 id="72-trigger-de-update-en-cliente">7.2 Trigger de UPDATE en Cliente</h3>
+<pre><code class="language-sql"><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">OR</span> <span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TRIGGER</span> TR_Cliente_Update
+<span class="hljs-keyword">ON</span> dbo.Cliente
+AFTER <span class="hljs-keyword">UPDATE</span>
+<span class="hljs-keyword">AS</span>
+<span class="hljs-keyword">BEGIN</span>
+    <span class="hljs-keyword">SET</span> NOCOUNT <span class="hljs-keyword">ON</span>;
+
+    <span class="hljs-comment">-- Evento: UPDATE</span>
+    <span class="hljs-comment">-- Tablas virtuales disponibles:</span>
+    <span class="hljs-comment">--   deleted  = valores anteriores</span>
+    <span class="hljs-comment">--   inserted = valores nuevos</span>
+
+    <span class="hljs-keyword">SELECT</span> 
+        <span class="hljs-string">&#x27;Valores anteriores&#x27;</span> <span class="hljs-keyword">AS</span> estado,
+        d.ClienteID,
+        d.nombre
+    <span class="hljs-keyword">FROM</span> deleted d;
+
+    <span class="hljs-keyword">SELECT</span> 
+        <span class="hljs-string">&#x27;Valores nuevos&#x27;</span> <span class="hljs-keyword">AS</span> estado,
+        i.ClienteID,
+        i.nombre
+    <span class="hljs-keyword">FROM</span> inserted i;
+<span class="hljs-keyword">END</span>;
+GO
+
+<span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> Cliente
+GO
+
+<span class="hljs-keyword">UPDATE</span> Cliente <span class="hljs-keyword">SET</span> nombre <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;Juancho&#x27;</span> <span class="hljs-keyword">WHERE</span> ClienteID <span class="hljs-operator">=</span> <span class="hljs-number">4</span> 
+GO
+
+<span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> Cliente
+GO
+</code></pre>
+<p><strong>Punto clave:</strong></p>
+<ul>
+<li>Se muestran los valores antes y después del <code>UPDATE</code> usando <code>deleted</code> e <code>inserted</code>.</li>
+</ul>
+<hr>
+<h3 id="73-trigger-de-delete-en-cliente">7.3 Trigger de DELETE en Cliente</h3>
+<pre><code class="language-sql"><span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">OR</span> <span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TRIGGER</span> TR_Cliente_Delete
+<span class="hljs-keyword">ON</span> dbo.Cliente
+AFTER <span class="hljs-keyword">DELETE</span>
+<span class="hljs-keyword">AS</span>
+<span class="hljs-keyword">BEGIN</span>
+    <span class="hljs-keyword">SET</span> NOCOUNT <span class="hljs-keyword">ON</span>;
+
+    <span class="hljs-comment">-- Evento: DELETE</span>
+    <span class="hljs-comment">-- Tabla virtual disponible: deleted (contiene las filas eliminadas)</span>
+
+    <span class="hljs-keyword">SELECT</span>
+        <span class="hljs-string">&#x27;Cliente eliminado&#x27;</span> <span class="hljs-keyword">AS</span> evento,
+        d.ClienteID,
+        d.nombre
+    <span class="hljs-keyword">FROM</span> deleted d;
+<span class="hljs-keyword">END</span>;
+GO
+
+<span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> Cliente 
+GO
+
+<span class="hljs-keyword">DELETE</span> <span class="hljs-keyword">FROM</span> Cliente <span class="hljs-keyword">WHERE</span> ClienteID <span class="hljs-operator">=</span> <span class="hljs-number">4</span>
+GO
+
+<span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> Cliente 
+GO
+
+<span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> Factura
+GO
+</code></pre>
+<p><strong>Uso didáctico:</strong></p>
+<ul>
+<li>Permite ver qué filas fueron eliminadas, leyendo la tabla <code>deleted</code>.</li>
+</ul>
+<hr>
+<h2 id="8-trigger-de-regla-de-negocio-sobre-factura">8. Trigger de regla de negocio sobre Factura</h2>
+<h3 id="81-definición-del-trigger">8.1 Definición del trigger</h3>
+<pre><code class="language-sql"><span class="hljs-comment">-- Trigger de regla de negocio</span>
+<span class="hljs-comment">-- No se puede cambiar el código de cliente en una factura </span>
+<span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">OR</span> <span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TRIGGER</span> TR_Factura_NoCambiarCliente
+<span class="hljs-keyword">ON</span> dbo.Factura
+AFTER <span class="hljs-keyword">UPDATE</span>
+<span class="hljs-keyword">AS</span>
+<span class="hljs-keyword">BEGIN</span>
+    <span class="hljs-keyword">SET</span> NOCOUNT <span class="hljs-keyword">ON</span>;
+
+    IF <span class="hljs-keyword">EXISTS</span> (
+        <span class="hljs-keyword">SELECT</span> <span class="hljs-number">1</span>
+        <span class="hljs-keyword">FROM</span> inserted i
+        <span class="hljs-keyword">JOIN</span> deleted d <span class="hljs-keyword">ON</span> i.FacturaID <span class="hljs-operator">=</span> d.FacturaID
+        <span class="hljs-keyword">WHERE</span> i.ClienteID <span class="hljs-operator">&lt;&gt;</span> d.ClienteID
+    )
+    <span class="hljs-keyword">BEGIN</span>
+        RAISERROR(<span class="hljs-string">&#x27;No se puede reasignar una factura a otro cliente.&#x27;</span>, <span class="hljs-number">16</span>, <span class="hljs-number">1</span>);
+        <span class="hljs-keyword">ROLLBACK</span> TRANSACTION;
+        <span class="hljs-keyword">RETURN</span>;
+    <span class="hljs-keyword">END</span>
+<span class="hljs-keyword">END</span>;
+GO
+</code></pre>
+<p><strong>Concepto:</strong></p>
+<ul>
+<li>Este trigger implementa una regla de negocio: una vez creada la factura, no se puede cambiar el cliente asociado.</li>
+<li>Se compara <code>ClienteID</code> antes (<code>deleted</code>) y después (<code>inserted</code>) del <code>UPDATE</code>.</li>
+</ul>
+<h3 id="82-pruebas-del-trigger-de-factura">8.2 Pruebas del trigger de Factura</h3>
+<pre><code class="language-sql"><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> Factura 
+GO
+
+<span class="hljs-keyword">UPDATE</span> Factura <span class="hljs-keyword">SET</span> total <span class="hljs-operator">=</span> <span class="hljs-number">1000</span> <span class="hljs-keyword">WHERE</span> FacturaID <span class="hljs-operator">=</span> <span class="hljs-number">1</span>
+GO
+
+<span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> Factura 
+GO
+
+<span class="hljs-keyword">UPDATE</span> Factura <span class="hljs-keyword">SET</span> ClienteID <span class="hljs-operator">=</span> <span class="hljs-number">2</span> <span class="hljs-keyword">WHERE</span> FacturaID <span class="hljs-operator">=</span> <span class="hljs-number">1</span>
+GO
+
+<span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> Factura 
+GO
+</code></pre>
+<p><strong>Resultados esperados:</strong></p>
+<ul>
+<li>
+<p>El <code>UPDATE</code> que cambia solo <code>total</code> es válido.</p>
+</li>
+<li>
+<p>El <code>UPDATE</code> que intenta cambiar <code>ClienteID</code> debe fallar con el mensaje:</p>
+<p><code>No se puede reasignar una factura a otro cliente.</code></p>
+</li>
+</ul>
+<hr>
+<h2 id="9-miniquiz">9. Mini‑quiz</h2>
+<ol>
+<li>¿Qué diferencia hay entre un <code>CHECK</code> y un <code>FOREIGN KEY</code>?</li>
+<li>¿Por qué un <code>INSERT</code> con total negativo falla en la tabla <code>Factura</code>?</li>
+<li>¿Qué tabla virtual contiene los valores anteriores en un <code>UPDATE</code>?</li>
+<li>¿Por qué el trigger <code>TR_Factura_NoCambiarCliente</code> usa <code>inserted</code> y <code>deleted</code> a la vez?</li>
+<li>¿Qué ocurriría si se definiera <code>ON DELETE CASCADE</code> en la relación <code>Factura–Cliente</code>?</li>
+</ol>
+<hr>
+<h2 id="10-ejercicios-propuestos">10. Ejercicios propuestos</h2>
+<ol>
+<li>Crear un trigger en <code>Factura</code> que impida borrar facturas con <code>total &gt; 0</code>.</li>
+<li>Crear una tabla de auditoría y un trigger que registre cada <code>DELETE</code> en <code>Cliente</code>.</li>
+<li>Modificar el modelo para permitir <code>ON DELETE SET NULL</code> y ajustar <code>ClienteID</code> en <code>Factura</code> para aceptar <code>NULL</code>.</li>
+<li>Crear un trigger que valide que <code>fecha</code> de <code>Factura</code> no sea futura.</li>
+<li>Escribir un procedimiento almacenado que inserte facturas y pruebe los triggers definidos.</li>
+</ol>
+
+            
+            
+        </body>
+        </html>

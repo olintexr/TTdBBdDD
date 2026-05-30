@@ -1,763 +1,439 @@
-# 02 – Integridad referencial, triggers y reglas de negocio
+# 02 – Integridad referencial, CHECK y triggers con inserted/deleted
 
-## 1. Idea central
+## 1. Objetivo del capítulo
 
-La integridad de los datos es el núcleo de un sistema de bases de datos.  
-Este capítulo muestra cómo SQL Server protege la coherencia del sistema mediante:
+En este capítulo se muestra, paso a paso, cómo:
 
-- Claves foráneas  
-- Cascadas  
-- Restricciones CHECK  
-- Tablas puente  
-- Triggers  
-- Procedimientos almacenados con manejo profesional de errores  
-- SQL dinámico seguro  
-- Cursores  
-- Reglas de negocio declaradas en el motor  
+- Definir una base de datos de ejemplo.
+- Crear tablas relacionadas con integridad referencial.
+- Usar restricciones `CHECK` y valores por defecto.
+- Provocar errores controlados (reglas declarativas).
+- Definir triggers de `INSERT`, `UPDATE` y `DELETE`.
+- Explicar el uso de las tablas virtuales `inserted` y `deleted`.
+- Implementar una regla de negocio con un trigger sobre `Factura`.
 
-El objetivo es que el estudiante comprenda que **la integridad debe declararse, automatizarse y garantizarse desde el motor**, no desde la aplicación.
+Todo el contenido se basa en el siguiente script, organizado y comentado.
 
 ---
 
-## 2. Conceptos fundamentales
-
-### 2.1 Integridad referencial  
-Garantiza que las relaciones entre tablas se mantengan válidas.
-
-### 2.2 Cascadas  
-Propagan automáticamente acciones entre tablas relacionadas.
-
-### 2.3 Restricciones CHECK  
-Validan valores antes de insertarlos o actualizarlos.
-
-### 2.4 Tablas puente  
-Representan relaciones muchos‑a‑muchos.
-
-### 2.5 Triggers  
-Código que se ejecuta automáticamente ante INSERT, UPDATE o DELETE.
-
-### 2.6 Procedimientos almacenados avanzados  
-Incluyen SQL dinámico, SQL estático, manejo de errores y cursores.
-
----
-
-# 3. BancoDB – Integridad estructural  
-*(Código completo)*
+## 2. Creación de la base de datos y limpieza inicial
 
 ```sql
-----------------------------------------------------------
--- (a) Conectarse a master y preparar la base de datos
-----------------------------------------------------------
-USE master;
+CREATE DATABASE REGLAS_DB
 GO
 
-DECLARE @DBName SYSNAME = N'BancoDB';
-DECLARE @SQL NVARCHAR(MAX);
-
-IF EXISTS (SELECT 1 FROM sys.databases WHERE name = @DBName)
-BEGIN
-    SET @SQL = N'ALTER DATABASE [' + @DBName + '] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;';
-    EXEC(@SQL);
-
-    SET @SQL = N'DROP DATABASE [' + @DBName + '];';
-    EXEC(@SQL);
-END
+USE REGLAS_DB 
 GO
 
-CREATE DATABASE BancoDB;
+IF OBJECT_ID('dbo.Factura', 'U') IS NOT NULL DROP TABLE dbo.Factura;
+IF OBJECT_ID('dbo.Cliente', 'U') IS NOT NULL DROP TABLE dbo.Cliente;
 GO
+```
 
-USE BancoDB;
-GO
+**Comentarios clave:**
 
-IF OBJECT_ID('dbo.Prestatario', 'U') IS NOT NULL DROP TABLE dbo.Prestatario;
-IF OBJECT_ID('dbo.Prestamo',    'U') IS NOT NULL DROP TABLE dbo.Prestamo;
-IF OBJECT_ID('dbo.Impositor',   'U') IS NOT NULL DROP TABLE dbo.Impositor;
-IF OBJECT_ID('dbo.Cuenta',      'U') IS NOT NULL DROP TABLE dbo.Cuenta;
-IF OBJECT_ID('dbo.Cliente',     'U') IS NOT NULL DROP TABLE dbo.Cliente;
-IF OBJECT_ID('dbo.Sucursal',    'U') IS NOT NULL DROP TABLE dbo.Sucursal;
-GO
+- Se crea la base de datos `REGLAS_DB` y se selecciona con `USE`.
+- Se eliminan las tablas `Factura` y `Cliente` si existen, para garantizar un entorno limpio y reproducible.
 
-CREATE TABLE dbo.Cliente
-(
-    ClienteID       INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-    nombre_cliente  NVARCHAR(20)  NOT NULL UNIQUE,
-    calle_cliente   NVARCHAR(30)  NULL,
-    ciudad_cliente  NVARCHAR(30)  NULL
-);
-GO
+---
 
-CREATE TABLE dbo.Sucursal
-(
-    SucursalID       INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-    nombre_sucursal  NVARCHAR(15)  NOT NULL UNIQUE,
-    ciudad_sucursal  NVARCHAR(30)  NULL,
-    activos          DECIMAL(16,2) NOT NULL CHECK (activos >= 0)
-);
-GO
+## 3. Tabla Cliente
 
-CREATE TABLE dbo.Cuenta
-(
-    CuentaID        INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-    numero_cuenta   NVARCHAR(10)  NOT NULL UNIQUE,
-    SucursalID      INT           NOT NULL,
-    saldo           DECIMAL(12,2) NOT NULL CHECK (saldo >= 0),
-    FOREIGN KEY (SucursalID)
-        REFERENCES dbo.Sucursal(SucursalID)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE
-);
-GO
-
-CREATE TABLE dbo.Prestamo
-(
-    PrestamoID       INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-    numero_prestamo  NVARCHAR(10)  NOT NULL UNIQUE,
-    SucursalID       INT           NOT NULL,
-    monto            DECIMAL(12,2) NOT NULL CHECK (monto >= 0),
-    FOREIGN KEY (SucursalID)
-        REFERENCES dbo.Sucursal(SucursalID)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE
-);
-GO
-
-CREATE TABLE dbo.Impositor
-(
-    ClienteID  INT NOT NULL,
-    CuentaID   INT NOT NULL,
-    PRIMARY KEY (ClienteID, CuentaID),
-    FOREIGN KEY (ClienteID) REFERENCES dbo.Cliente(ClienteID) ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY (CuentaID)  REFERENCES dbo.Cuenta(CuentaID)  ON DELETE CASCADE ON UPDATE CASCADE
-);
-GO
-
-CREATE TABLE dbo.Prestatario
-(
-    ClienteID   INT NOT NULL,
-    PrestamoID  INT NOT NULL,
-    PRIMARY KEY (ClienteID, PrestamoID),
-    FOREIGN KEY (ClienteID)  REFERENCES dbo.Cliente(ClienteID)  ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY (PrestamoID) REFERENCES dbo.Prestamo(PrestamoID) ON DELETE CASCADE ON UPDATE CASCADE
+```sql
+CREATE TABLE dbo.Cliente (
+    ClienteID INT NOT NULL PRIMARY KEY,
+    nombre NVARCHAR(50) NOT NULL UNIQUE
 );
 GO
 ```
 
-*(Sigue el script completo con semillas, inserts, joins, intentos de error, etc.)*
+**Puntos importantes:**
+
+- `ClienteID` es clave primaria manual (no es IDENTITY).
+- `nombre` es obligatorio (`NOT NULL`) y único (`UNIQUE`), evitando clientes duplicados por nombre.
 
 ---
 
-# 4. RRHH_DB – Integridad lógica  
-*(Código completo)*
+## 4. Tabla Factura con CHECK, DEFAULT y FOREIGN KEY
 
 ```sql
-/* ================================================
-   0) Borrar y recrear la base de datos
-================================================ */
-USE master;
-GO
+-- Tabla Factura: almacena encabezados de facturas emitidas
+CREATE TABLE dbo.Factura (
+    
+    -- Clave primaria manual; no es IDENTITY
+    FacturaID INT NOT NULL PRIMARY KEY,
 
-DECLARE @DB SYSNAME = N'RRHH_DB';
-DECLARE @SQL NVARCHAR(MAX);
+    -- Cliente al que pertenece la factura; debe existir en dbo.Cliente
+    ClienteID INT NOT NULL,
 
-IF EXISTS (SELECT 1 FROM sys.databases WHERE name = @DB)
-BEGIN
-    PRINT 'Cerrando conexiones a ' + @DB + ' y eliminando...';
-    SET @SQL = N'ALTER DATABASE [' + @DB + '] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;';
-    EXEC(@SQL);
-    SET @SQL = N'DROP DATABASE [' + @DB + '];';
-    EXEC(@SQL);
-END;
+    -- Monto total de la factura; no puede ser negativo
+    -- Esto quiere decir que cualquier insert o update que intente poner "total" en negativo, va a fallar
+    total DECIMAL(12,2) NOT NULL CHECK (total >= 0),
 
-PRINT 'Creando base de datos ' + @DB + '...';
-SET @SQL = N'CREATE DATABASE [' + @DB + '];';
-EXEC(@SQL);
-GO
+    -- Fecha de emisión; si no se especifica, usa la fecha actual del servidor
+    fecha DATE NOT NULL DEFAULT GETDATE(),
 
-USE RRHH_DB;
-GO
-SET NOCOUNT ON;
-SET XACT_ABORT ON;
-GO
+    -- Integridad referencial: cada factura debe apuntar a un cliente válido
+    CONSTRAINT FK_Factura_Cliente FOREIGN KEY (ClienteID)
+        REFERENCES dbo.Cliente(ClienteID)
 
-/* ================================================
-   1) Esquema (Ej. 4.2)
-   - Empleado(nombre_empleado, calle, ciudad)
-   - Empresa(nombre_empresa, ciudad)
-   - Trabaja(nombre_empleado, nombre_empresa, sueldo)
-   - Jefe(nombre_empleado, nombre_jefe)
-================================================ */
-
--- Limpieza defensiva 
-IF OBJECT_ID('dbo.TR_Trabaja_ChkCiudad',        'TR') IS NOT NULL DROP TRIGGER dbo.TR_Trabaja_ChkCiudad;
-IF OBJECT_ID('dbo.TR_Trabaja_ChkSueldoVsJefe',  'TR') IS NOT NULL DROP TRIGGER dbo.TR_Trabaja_ChkSueldoVsJefe;
-IF OBJECT_ID('dbo.TR_Jefe_ChkSueldo',           'TR') IS NOT NULL DROP TRIGGER dbo.TR_Jefe_ChkSueldo;
-IF OBJECT_ID('dbo.Jefe',     'U') IS NOT NULL DROP TABLE dbo.Jefe;
-IF OBJECT_ID('dbo.Trabaja',  'U') IS NOT NULL DROP TABLE dbo.Trabaja;
-IF OBJECT_ID('dbo.Empresa',  'U') IS NOT NULL DROP TABLE dbo.Empresa;
-IF OBJECT_ID('dbo.Empleado', 'U') IS NOT NULL DROP TABLE dbo.Empleado;
-GO
-
--- Empleado
-CREATE TABLE dbo.Empleado
-(
-    EmpleadoID      INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_Empleado PRIMARY KEY,
-    nombre_empleado NVARCHAR(50) NOT NULL,
-    calle           NVARCHAR(100) NULL,
-    ciudad          NVARCHAR(50) NOT NULL,
-    CONSTRAINT UQ_Empleado_nombre UNIQUE (nombre_empleado)
-);
-GO
-
--- Empresa
-CREATE TABLE dbo.Empresa
-(
-    EmpresaID      INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_Empresa PRIMARY KEY,
-    nombre_empresa NVARCHAR(80) NOT NULL,
-    ciudad         NVARCHAR(50) NOT NULL,
-    CONSTRAINT UQ_Empresa_nombre UNIQUE (nombre_empresa)
-);
-GO
-
-/* Trabaja
-   - Interpretación 1:1 (cada empleado trabaja para una empresa)
-   - PK = EmpleadoID (coincide con Empleado)
+/*
+-- Si intentan borrar/actualizar el cliente no hagas nada si tiene hijos en factura
+CONSTRAINT FK_Factura_Cliente FOREIGN KEY (ClienteID)
+    REFERENCES dbo.Cliente(ClienteID)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION;
 */
-CREATE TABLE dbo.Trabaja
-(
-    EmpleadoID INT NOT NULL CONSTRAINT PK_Trabaja PRIMARY KEY,
-    EmpresaID  INT NOT NULL,
-    sueldo     DECIMAL(12,2) NOT NULL CONSTRAINT CK_Trabaja_sueldo_nonneg CHECK (sueldo >= 0),
 
-    CONSTRAINT FK_Trabaja_Empleado
-        FOREIGN KEY (EmpleadoID) REFERENCES dbo.Empleado(EmpleadoID)
-        ON DELETE CASCADE ON UPDATE CASCADE,
-
-    CONSTRAINT FK_Trabaja_Empresa
-        FOREIGN KEY (EmpresaID)  REFERENCES dbo.Empresa(EmpresaID)
-        ON DELETE CASCADE ON UPDATE CASCADE
-);
-GO
-
-/* Jefe
-   - Cada empleado tiene a lo sumo un jefe (PK = EmpleadoID)
-   - Tanto empleado como jefe existen en Empleado
+/*
+-- Si borran/actualizan el cliente, borra también la factura
+ON DELETE CASCADE
+ON UPDATE CASCADE
 */
-CREATE TABLE dbo.Jefe
-(
-    EmpleadoID INT NOT NULL
-        CONSTRAINT PK_Jefe PRIMARY KEY,      -- cada empleado a lo sumo un jefe
-    JefeID     INT NOT NULL,
 
-    CONSTRAINT CK_Jefe_NoAutoReferencia
-        CHECK (EmpleadoID <> JefeID),
+/*
+-- Si borran/actualizan el cliente, deja el cliente de factura en null
+-- Para que esto tenga efecto, el campo cliente en factura debe aceptar valores null
+ON DELETE SET NULL
+ON UPDATE SET NULL
+*/
 
-    CONSTRAINT FK_Jefe_Empleado
-        FOREIGN KEY (EmpleadoID)
-        REFERENCES dbo.Empleado(EmpleadoID)
-        ON DELETE NO ACTION      -- = RESTRICT
-        ON UPDATE NO ACTION,
-
-    CONSTRAINT FK_Jefe_Jefe
-        FOREIGN KEY (JefeID)
-        REFERENCES dbo.Empleado(EmpleadoID)
-        ON DELETE NO ACTION      -- = RESTRICT
-        ON UPDATE NO ACTION
+/*
+-- Si borran/actualizan el cliente, pon el valor por defecto en el cliente de factura
+ON DELETE SET DEFAULT
+ON UPDATE SET DEFAULT
+*/
 );
 GO
+```
 
-/* ================================================
-   2) Reglas del Ej. 4.3 (a) y (b) vía TRIGGERS
-   - (a) Empleado y Empresa misma ciudad
-   - (b) Sueldo empleado <= sueldo de su jefe
-================================================ */
+**Conceptos:**
 
--- (a) Misma ciudad
-CREATE TRIGGER dbo.TR_Trabaja_ChkCiudad
-ON dbo.Trabaja
-AFTER INSERT, UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
+- `CHECK (total >= 0)` impide totales negativos en `INSERT` y `UPDATE`.
+- `DEFAULT GETDATE()` asigna la fecha del sistema si no se especifica `fecha`.
+- `FOREIGN KEY (ClienteID)` garantiza que toda factura apunte a un cliente existente.
+- En los comentarios se muestran las variantes de comportamiento de la clave foránea:
+  - `NO ACTION`
+  - `CASCADE`
+  - `SET NULL`
+  - `SET DEFAULT`
 
-    IF EXISTS (
-        SELECT 1
-        FROM inserted i
-        JOIN dbo.Empleado e ON e.EmpleadoID = i.EmpleadoID
-        JOIN dbo.Empresa  m ON m.EmpresaID  = i.EmpresaID
-        WHERE e.ciudad <> m.ciudad
-    )
-    BEGIN
-        RAISERROR (N'4.3(a): El empleado debe trabajar en una empresa de su misma ciudad.', 16, 1);
-        ROLLBACK TRANSACTION;
-        RETURN;
-    END
-END;
+---
+
+## 5. Inserción y validación de datos en Cliente y Factura
+
+### 5.1 Inserción de clientes
+
+```sql
+-- Inserción de algunos clientes
+Insert into dbo.Cliente values (1, 'Olinto'), (2, 'Aaron'), (3, 'Gustavo')
 GO
 
--- (b) Sueldo empleado <= sueldo de su jefe
--- Verifica cuando cambia el sueldo/empresa del empleado o del jefe
-CREATE TRIGGER dbo.TR_Trabaja_ChkSueldoVsJefe
-ON dbo.Trabaja
-AFTER INSERT, UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
+SELECT * FROM dbo.Cliente
+GO
+```
 
-    -- Empleado actualizado: comparar con su jefe (si lo tiene)
-    IF EXISTS (
-        SELECT 1
-        FROM inserted i
-        JOIN dbo.Jefe j        ON j.EmpleadoID = i.EmpleadoID
-        JOIN dbo.Trabaja tBoss ON tBoss.EmpleadoID = j.JefeID
-        WHERE i.sueldo > tBoss.sueldo
-    )
-    BEGIN
-        RAISERROR (N'4.3(b): El sueldo del empleado no puede superar al de su jefe.', 16, 1);
-        ROLLBACK TRANSACTION; RETURN;
-    END
+### 5.2 Intentos de inserción de facturas incorrectas
 
-    -- Jefe actualizado: sus subordinados no pueden superar su nuevo sueldo
-    IF EXISTS (
-        SELECT 1
-        FROM inserted i                   -- i puede ser el JEFE
-        JOIN dbo.Jefe sub ON sub.JefeID = i.EmpleadoID
-        JOIN dbo.Trabaja tEmp ON tEmp.EmpleadoID = sub.EmpleadoID
-        WHERE tEmp.sueldo > i.sueldo
-    )
-    BEGIN
-        RAISERROR (N'4.3(b): Tras el cambio, hay subordinados con sueldo mayor al del jefe.', 16, 1);
-        ROLLBACK TRANSACTION; RETURN;
-    END
-END;
+```sql
+-- Intento de inserción de facturas incorrectas
+-- (Total negativo)
+INSERT INTO dbo.Factura VALUES (1, 80, -100, GETDATE() )
 GO
 
--- (b) También al insertar/actualizar relación de Jefe
-CREATE TRIGGER dbo.TR_Jefe_ChkSueldo
-ON dbo.Jefe
-AFTER INSERT, UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
+-- Intento de inserción de facturas incorrectas
+-- (Cliente no está)
+INSERT INTO dbo.Factura VALUES (1, 80, 100, GETDATE() )
+GO
+```
 
-    IF EXISTS (
-        SELECT 1
-        FROM inserted j
-        JOIN dbo.Trabaja tEmp  ON tEmp.EmpleadoID = j.EmpleadoID
-        JOIN dbo.Trabaja tBoss ON tBoss.EmpleadoID = j.JefeID
-        WHERE tEmp.sueldo > tBoss.sueldo
-    )
-    BEGIN
-        RAISERROR (N'4.3(b): El empleado no puede tener sueldo mayor al de su jefe.', 16, 1);
-        ROLLBACK TRANSACTION; RETURN;
-    END
-END;
+**Qué se espera:**
+
+- El primer `INSERT` falla por el `CHECK (total >= 0)`.
+- El segundo `INSERT` falla por la `FOREIGN KEY` (cliente 80 no existe).
+
+### 5.3 Inserción correcta
+
+```sql
+-- Intento de inserción de factura correcta
+INSERT INTO dbo.Factura VALUES (1, 1, 100, GETDATE() )
 GO
 
-/* ================================================
-   3) Datos de ejemplo (seed opcional)
-================================================ */
-BEGIN TRAN;
+SELECT * FROM dbo.Factura
+GO
+```
 
--- Empleados
-INSERT INTO dbo.Empleado (nombre_empleado, calle, ciudad) VALUES
-(N'Ana López',   N'Av. 1 #123',   N'San José'),
-(N'Bruno Pérez', N'Calle 5 #234', N'San José'),
-(N'Carla Gómez', N'Av. 9 #555',   N'Heredia'),
-(N'Diego Ruiz',  N'Calle 8 #777', N'Heredia');
+### 5.4 Actualización errónea (CHECK)
 
--- Empresas
-INSERT INTO dbo.Empresa (nombre_empresa, ciudad) VALUES
-(N'ACME',   N'San José'),
-(N'TechSA', N'Heredia');
-
--- Trabaja (1:1 con Empleado)
-INSERT INTO dbo.Trabaja (EmpleadoID, EmpresaID, sueldo)
-SELECT e.EmpleadoID, m.EmpresaID, v.sueldo
-FROM (VALUES
-    (N'Ana López',   N'ACME',   1500.00),
-    (N'Bruno Pérez', N'ACME',   2200.00),
-    (N'Carla Gómez', N'TechSA', 2400.00),
-    (N'Diego Ruiz',  N'TechSA', 1800.00)
-) v(nombre_empleado, nombre_empresa, sueldo)
-JOIN dbo.Empleado e ON e.nombre_empleado = v.nombre_empleado
-JOIN dbo.Empresa  m ON m.nombre_empresa  = v.nombre_empresa;
-
--- Jefes (Bruno jefe de Ana; Carla jefe de Diego)
-INSERT INTO dbo.Jefe (EmpleadoID, JefeID)
-SELECT eEmp.EmpleadoID, eBoss.EmpleadoID
-FROM (VALUES
-    (N'Ana López',  N'Bruno Pérez'),
-    (N'Diego Ruiz', N'Carla Gómez')
-) v(emp, boss)
-JOIN dbo.Empleado eEmp  ON eEmp.nombre_empleado  = v.emp
-JOIN dbo.Empleado eBoss ON eBoss.nombre_empleado = v.boss;
-
-COMMIT TRAN;
+```sql
+-- Intento de actualización errónea (valor negativo)
+UPDATE dbo.Factura SET total = -10 WHERE FacturaID = 1
 GO
 
-/* ================================================
-   4) Consultas de verificación
-================================================ */
--- (i) Empleado–Empresa–Sueldo–Jefe
-SELECT e.nombre_empleado, e.ciudad AS ciudad_empleado,
-       m.nombre_empresa, m.ciudad AS ciudad_empresa,
-       t.sueldo,
-       ej.nombre_empleado AS nombre_jefe
-FROM dbo.Empleado e
-LEFT JOIN dbo.Trabaja t  ON t.EmpleadoID = e.EmpleadoID
-LEFT JOIN dbo.Empresa m  ON m.EmpresaID  = t.EmpresaID
-LEFT JOIN dbo.Jefe j     ON j.EmpleadoID = e.EmpleadoID
-LEFT JOIN dbo.Empleado ej ON ej.EmpleadoID = j.JefeID
-ORDER BY e.nombre_empleado;
+SELECT * FROM dbo.Factura
+GO
+```
 
--- (ii) Pruebas de reglas:
--- -- 4.3(a) Violación de ciudad:
--- UPDATE t SET EmpresaID = (SELECT EmpresaID FROM dbo.Empresa WHERE nombre_empresa=N'TechSA')
--- FROM dbo.Trabaja t JOIN dbo.Empleado e ON e.EmpleadoID=t.EmpleadoID
--- WHERE e.nombre_empleado=N'Ana López'; -- vive en San José => ERROR
+**Resultado esperado:**
 
--- -- 4.3(b) Subir sueldo de Ana por encima del de Bruno => ERROR
--- UPDATE dbo.Trabaja SET sueldo = 3000
--- WHERE EmpleadoID = (SELECT EmpleadoID FROM dbo.Empleado WHERE nombre_empleado=N'Ana López');
+- El `UPDATE` falla por violar el `CHECK (total >= 0)`.
 
+### 5.5 Intento de borrar un cliente con facturas
+
+```sql
+-- intento de borrar el cliente que está en la factura
+DELETE FROM dbo.Cliente WHERE ClienteID = 1
+GO
+```
+
+Con la configuración actual (sin `ON DELETE CASCADE`), esta operación debe fallar por integridad referencial.
+
+### 5.6 Inserción de factura sin fecha (uso de DEFAULT)
+
+```sql
+-- Inserción de factura SIN FECHA (Tomará la del sistema)
+INSERT INTO [dbo].[Factura]
+           ([FacturaID]
+           ,[ClienteID]
+           ,[total])
+     VALUES
+           (2
+           ,2
+           ,2000)
+GO
+
+SELECT * FROM Factura
+GO 
+```
+
+**Punto clave:**
+
+- La columna `fecha` toma automáticamente `GETDATE()` gracias al `DEFAULT`.
+
+---
+
+## 6. Explicación de triggers e inserted/deleted
+
+```sql
+/*
+Un trigger es un objeto que SQL Server ejecuta automáticamente cuando ocurre un INSERT, UPDATE o DELETE sobre una tabla. 
+Dentro del trigger, el motor expone dos tablas virtuales: inserted y deleted. 
+Estas no existen físicamente, pero contienen las filas afectadas por la operación. 
+En un INSERT, inserted trae las filas nuevas; en un DELETE, deleted trae las filas eliminadas; 
+En un UPDATE, deleted contiene los valores anteriores mientras inserted contiene los valores nuevos. 
+Como SQL Server procesa operaciones por conjuntos, ambas pueden tener varias filas, 
+y por eso los triggers deben escribirse siempre pensando en conjuntos y no en una sola fila.
+
+-- Evento: este trigger se ejecuta cuando ocurre un INSERT, UPDATE o DELETE,
+-- según cómo haya sido definido.
+--
+-- Tablas virtuales disponibles dentro del trigger:
+--   inserted : contiene las filas nuevas (INSERT) o los valores nuevos (UPDATE).
+--   deleted  : contiene las filas eliminadas (DELETE) o los valores anteriores (UPDATE).
+--
+-- En INSERT solo existe inserted.
+-- En DELETE solo existe deleted.
+-- En UPDATE existen ambas: deleted = valores viejos, inserted = valores nuevos.
+*/
 ```
 
 ---
 
-# 5. Trigger de activos vs suma de préstamos  
-*(Código completo)*
+## 7. Triggers sobre Cliente
+
+### 7.1 Trigger de INSERT en Cliente
 
 ```sql
-CREATE OR ALTER TRIGGER TR_Chk_Activos_Navacerrada
-ON dbo.Prestamo
-AFTER INSERT, UPDATE, DELETE
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DECLARE @SucursalID INT;
-    DECLARE @activos DECIMAL(16,2);
-    DECLARE @suma_prestamos DECIMAL(16,2);
-
-    ----------------------------------------------------------
-    -- 1. Obtener el SucursalID de Navacerrada
-    ----------------------------------------------------------
-    SELECT @SucursalID = SucursalID
-    FROM dbo.Sucursal
-    WHERE nombre_sucursal = N'Navacerrada';
-
-    IF @SucursalID IS NULL
-        RETURN;  -- No existe la sucursal, no hay nada que validar
-
-    ----------------------------------------------------------
-    -- 2. Obtener los activos actuales de la sucursal
-    ----------------------------------------------------------
-    SELECT @activos = activos
-    FROM dbo.Sucursal
-    WHERE SucursalID = @SucursalID;
-
-    ----------------------------------------------------------
-    -- 3. Calcular la suma total de préstamos de esa sucursal
-    ----------------------------------------------------------
-    SELECT @suma_prestamos = SUM(monto)
-    FROM dbo.Prestamo
-    WHERE SucursalID = @SucursalID;
-
-    ----------------------------------------------------------
-    -- 4. Validar la igualdad
-    ----------------------------------------------------------
-    IF @activos <> ISNULL(@suma_prestamos, 0)
-    BEGIN
-        RAISERROR (
-            N'Error: los activos de la sucursal Navacerrada no coinciden con la suma de sus préstamos.',
-            16, 1
-        );
-        ROLLBACK TRANSACTION;
-        RETURN;
-    END
-END;
-GO
-```
-
----
-
-# 6. Triggers básicos: inserted y deleted  
-*(Código completo)*
-
-```sql
-create table tabla (nombre varchar(16), saldo integer)
-go
-
-insert into tabla values  
-('Olinto', 600), 
-('Edelyn', 900);
-go
-
-update tabla set saldo = '100' where nombre = 'Olinto';
-go
-
-delete from tabla where nombre = 'Olinto';
-go
-
-CREATE OR ALTER TRIGGER tgr_prueba_insert 
-ON dbo.tabla 
+CREATE OR ALTER TRIGGER TR_Cliente_Insert
+ON dbo.Cliente
 AFTER INSERT
-AS 
+AS
 BEGIN
     SET NOCOUNT ON;
-    PRINT 'Acabo de insertar un registro';
 
-    SELECT 'Nuevos valores:' AS mensaje, nombre, saldo
-    FROM inserted;
-END
-GO
-
-CREATE OR ALTER TRIGGER tgr_prueba_delete 
-ON dbo.tabla 
-AFTER DELETE
-AS 
-BEGIN
-    SET NOCOUNT ON;
-    PRINT 'Acabo de borrar un registro';
-
-    SELECT 'Valores eliminados:' AS mensaje, nombre, saldo
-    FROM deleted;
-END
-GO
-
-CREATE OR ALTER TRIGGER tgr_prueba_update 
-ON dbo.tabla 
-AFTER UPDATE
-AS 
-BEGIN
-    SET NOCOUNT ON;
-    PRINT 'Acabo de actualizar un registro';
+    -- Evento: INSERT
+    -- Tabla virtual disponible: inserted (contiene las filas nuevas)
 
     SELECT 
-        'Valores anteriores:' AS mensaje,
-        d.nombre AS nombre_anterior, d.saldo AS saldo_anterior,
-        'Valores nuevos:' AS mensaje2,
-        i.nombre AS nombre_nuevo, i.saldo AS saldo_nuevo
-    FROM deleted d
-    INNER JOIN inserted i ON d.nombre = i.nombre;
-END
+        'Cliente insertado' AS evento,
+        i.ClienteID,
+        i.nombre
+    FROM inserted i;
+END;
+GO
+
+-- Este insert llamará al trigger de insert de la tabla de clientes
+INSERT INTO Cliente(ClienteID, nombre) VALUES (4,'Pedrito')
 GO
 ```
 
----
+**Idea didáctica:**
 
-# 7. Procedimientos almacenados avanzados  
-*(Código completo)*
-
-## 7.1 SQL dinámico seguro
-
-```sql
-CREATE PROCEDURE dbo.usp_Cliente_Delete_Dynamic
-    @ClienteID INT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    BEGIN TRY
-        IF @ClienteID IS NULL
-            THROW 50001, 'ClienteID no puede ser NULL.', 1;
-
-        DECLARE @sql NVARCHAR(MAX) = N'DELETE FROM dbo.Cliente WHERE ClienteID = @id;';
-        DECLARE @params NVARCHAR(100) = N'@id INT';
-
-        BEGIN TRAN;
-
-        EXEC sp_executesql @sql, @params, @id = @ClienteID;
-
-        DECLARE @rows INT = @@ROWCOUNT;
-
-        COMMIT TRAN;
-
-        SELECT @rows AS filas_afectadas;
-    END TRY
-    BEGIN CATCH
-        IF XACT_STATE() <> 0 ROLLBACK TRAN;
-
-        THROW;
-    END CATCH
-END
-GO
-```
+- Cada vez que se inserta un cliente, el trigger muestra las filas de `inserted`.
 
 ---
 
-## 7.2 SQL estático
+### 7.2 Trigger de UPDATE en Cliente
 
 ```sql
-CREATE PROCEDURE dbo.usp_Cliente_Delete_Static
-    @ClienteID INT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    BEGIN TRY
-        IF @ClienteID IS NULL
-            THROW 50002, 'ClienteID no puede ser NULL.', 1;
-
-        BEGIN TRAN;
-
-        DELETE FROM dbo.Cliente
-        WHERE ClienteID = @ClienteID;
-
-        DECLARE @rows INT = @@ROWCOUNT;
-
-        COMMIT TRAN;
-
-        SELECT @rows AS filas_afectadas;
-    END TRY
-    BEGIN CATCH
-        IF XACT_STATE() <> 0 ROLLBACK TRAN;
-        THROW;
-    END CATCH
-END
-GO
-```
-
----
-
-## 7.3 Cursores
-
-```sql
-CREATE PROCEDURE dbo.usp_Recorrer_Clientes
+CREATE OR ALTER TRIGGER TR_Cliente_Update
+ON dbo.Cliente
+AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    DECLARE 
-        @ClienteID INT,
-        @Nombre NVARCHAR(50),
-        @Calle NVARCHAR(100),
-        @Ciudad NVARCHAR(50);
+    -- Evento: UPDATE
+    -- Tablas virtuales disponibles:
+    --   deleted  = valores anteriores
+    --   inserted = valores nuevos
 
-    BEGIN TRY
-        PRINT 'Iniciando recorrido de clientes...';
+    SELECT 
+        'Valores anteriores' AS estado,
+        d.ClienteID,
+        d.nombre
+    FROM deleted d;
 
-        DECLARE curClientes CURSOR LOCAL FAST_FORWARD
-        FOR
-        SELECT ClienteID, nombre_cliente, calle_cliente, ciudad_cliente
-        FROM dbo.Cliente
-        ORDER BY ClienteID;
+    SELECT 
+        'Valores nuevos' AS estado,
+        i.ClienteID,
+        i.nombre
+    FROM inserted i;
+END;
+GO
 
-        OPEN curClientes;
+SELECT * FROM Cliente
+GO
 
-        FETCH NEXT FROM curClientes INTO @ClienteID, @Nombre, @Calle, @Ciudad;
+UPDATE Cliente SET nombre = 'Juancho' WHERE ClienteID = 4 
+GO
 
-        WHILE @@FETCH_STATUS = 0
-        BEGIN
-            PRINT CONCAT('ID=', @ClienteID, ' | Nombre=', @Nombre, ' | Calle=', ISNULL(@Calle,'(sin calle)'), ' | Ciudad=', ISNULL(@Ciudad,'(sin ciudad)'));
-
-            FETCH NEXT FROM curClientes INTO @ClienteID, @Nombre, @Calle, @Ciudad;
-        END
-
-        CLOSE curClientes;
-        DEALLOCATE curClientes;
-
-        PRINT 'Recorrido completado.';
-    END TRY
-    BEGIN CATCH
-        PRINT 'Error en usp_Recorrer_Clientes:';
-        PRINT ERROR_MESSAGE();
-
-        IF CURSOR_STATUS('local','curClientes') >= -1
-        BEGIN
-            CLOSE curClientes;
-            DEALLOCATE curClientes;
-        END
-    END CATCH
-END
+SELECT * FROM Cliente
 GO
 ```
 
----
+**Punto clave:**
 
-# 8. Ejercicios del capítulo
-
-1. Crear un trigger que impida que una cuenta quede con saldo negativo.  
-2. Crear un trigger que valide que el monto de un préstamo no supere los activos de su sucursal.  
-3. Crear un SP dinámico que actualice clientes con parámetros opcionales.  
-4. Crear un SP estático que inserte sucursales con validación previa.  
-5. Crear un cursor que recorra cuentas y calcule totales por sucursal.  
-6. Crear una tabla puente adicional Cliente–Empresa (clientes corporativos).  
-7. Crear un trigger que impida ciclos en la jerarquía de jefes.  
-8. Crear un reporte que muestre inconsistencias potenciales.  
+- Se muestran los valores antes y después del `UPDATE` usando `deleted` e `inserted`.
 
 ---
 
-# 9. Asignación formal  
+### 7.3 Trigger de DELETE en Cliente
 
-## Instrucciones
+```sql
+CREATE OR ALTER TRIGGER TR_Cliente_Delete
+ON dbo.Cliente
+AFTER DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
 
-El estudiante debe entregar un archivo `.sql` que contenga:
+    -- Evento: DELETE
+    -- Tabla virtual disponible: deleted (contiene las filas eliminadas)
 
-1. Un trigger que valide una regla de negocio compleja.  
-2. Un SP dinámico seguro usando sp_executesql.  
-3. Un SP estático equivalente.  
-4. Un cursor que recorra una tabla y muestre información.  
-5. Un conjunto de pruebas que demuestren que las reglas funcionan.  
+    SELECT
+        'Cliente eliminado' AS evento,
+        d.ClienteID,
+        d.nombre
+    FROM deleted d;
+END;
+GO
 
----
+SELECT * FROM Cliente 
+GO
 
-# 10. Mini‑quiz  
+DELETE FROM Cliente WHERE ClienteID = 4
+GO
 
-1. ¿Qué diferencia hay entre una restricción CHECK y un trigger?  
-2. ¿Cuándo es apropiado usar cascadas?  
-3. ¿Qué problema resuelven las tablas puente?  
-4. ¿Por qué un trigger puede acceder a inserted y deleted?  
-5. ¿Qué tipo de integridad controla que un empleado no gane más que su jefe?  
-6. ¿Por qué el SQL dinámico debe ser parametrizado?  
-7. ¿Cuándo es apropiado usar un cursor?  
+SELECT * FROM Cliente 
+GO
 
----
+SELECT * FROM Factura
+GO
+```
 
-# 11. Glosario  
+**Uso didáctico:**
 
-**Integridad referencial:** Garantía de relaciones válidas entre tablas.  
-**Cascada:** Propagación automática de acciones.  
-**Trigger:** Código que se ejecuta ante eventos.  
-**inserted/deleted:** Tablas virtuales de triggers.  
-**PK surrogate:** Clave primaria artificial.  
-**Tabla puente:** Tabla para relaciones muchos‑a‑muchos.  
-**CHECK:** Restricción de dominio.  
-**SQL dinámico:** SQL construido en tiempo de ejecución.  
-**sp_executesql:** SQL dinámico seguro y parametrizado.  
-**Cursor:** Mecanismo para recorrer filas una por una.  
-**TRY/CATCH:** Manejo de errores.  
-**THROW:** Re‑lanzamiento de errores con metadatos. 
+- Permite ver qué filas fueron eliminadas, leyendo la tabla `deleted`.
 
 ---
 
-# 12. Bibliografía comentada  
+## 8. Trigger de regla de negocio sobre Factura
 
-**Silberschatz, Korth, Sudarshan — *Database System Concepts*.**  
-Base teórica para integridad, modelos y arquitectura.
+### 8.1 Definición del trigger
 
-**Elmasri y Navathe — *Fundamentals of Database Systems*.**  
-Profundiza en diseño conceptual y normalización.
+```sql
+-- Trigger de regla de negocio
+-- No se puede cambiar el código de cliente en una factura 
+CREATE OR ALTER TRIGGER TR_Factura_NoCambiarCliente
+ON dbo.Factura
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
 
-**Itzik Ben‑Gan — *T‑SQL Fundamentals*.**  
-Lectura prioritaria para comprender triggers, SP y lógica T‑SQL.
+    IF EXISTS (
+        SELECT 1
+        FROM inserted i
+        JOIN deleted d ON i.FacturaID = d.FacturaID
+        WHERE i.ClienteID <> d.ClienteID
+    )
+    BEGIN
+        RAISERROR('No se puede reasignar una factura a otro cliente.', 16, 1);
+        ROLLBACK TRANSACTION;
+        RETURN;
+    END
+END;
+GO
+```
 
-**Microsoft Learn – SQL Server Documentation**  
-Referencia oficial para sintaxis y comportamiento del motor.
+**Concepto:**
 
-**Garcia‑Molina, Ullman, Widom — *Database Systems: The Complete Book*.**  
-Excelente para integridad lógica y teoría avanzada.
+- Este trigger implementa una regla de negocio: una vez creada la factura, no se puede cambiar el cliente asociado.
+- Se compara `ClienteID` antes (`deleted`) y después (`inserted`) del `UPDATE`.
 
-**Itzik Ben‑Gan — *Inside Microsoft SQL Server: T‑SQL Programming*.**  
-Optimización, manejo de errores y patrones profesionales.
+### 8.2 Pruebas del trigger de Factura
 
-**Joe Celko — *SQL for Smarties*.**  
-Problemas complejos y soluciones avanzadas.
+```sql
+SELECT * FROM Factura 
+GO
 
-**Markus Winand — *SQL Performance Explained*
+UPDATE Factura SET total = 1000 WHERE FacturaID = 1
+GO
+
+SELECT * FROM Factura 
+GO
+
+UPDATE Factura SET ClienteID = 2 WHERE FacturaID = 1
+GO
+
+SELECT * FROM Factura 
+GO
+```
+
+**Resultados esperados:**
+
+- El `UPDATE` que cambia solo `total` es válido.
+- El `UPDATE` que intenta cambiar `ClienteID` debe fallar con el mensaje:
+  
+  `No se puede reasignar una factura a otro cliente.`
 
 ---
 
+## 9. Mini‑quiz
+
+1. ¿Qué diferencia hay entre un `CHECK` y un `FOREIGN KEY`?  
+2. ¿Por qué un `INSERT` con total negativo falla en la tabla `Factura`?  
+3. ¿Qué tabla virtual contiene los valores anteriores en un `UPDATE`?  
+4. ¿Por qué el trigger `TR_Factura_NoCambiarCliente` usa `inserted` y `deleted` a la vez?  
+5. ¿Qué ocurriría si se definiera `ON DELETE CASCADE` en la relación `Factura–Cliente`?
+
+---
+
+## 10. Ejercicios propuestos
+
+1. Crear un trigger en `Factura` que impida borrar facturas con `total > 0`.  
+2. Crear una tabla de auditoría y un trigger que registre cada `DELETE` en `Cliente`.  
+3. Modificar el modelo para permitir `ON DELETE SET NULL` y ajustar `ClienteID` en `Factura` para aceptar `NULL`.  
+4. Crear un trigger que valide que `fecha` de `Factura` no sea futura.  
+5. Escribir un procedimiento almacenado que inserte facturas y pruebe los triggers definidos.
