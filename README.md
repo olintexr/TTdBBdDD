@@ -89,6 +89,31 @@ El capítulo está disponible en:
 
 ---
 
+## Contenido del Capítulo 4
+
+El cuarto capítulo aborda:
+
+- ETL y sus etapas  
+- Esquema en estrella  
+- OLTP vs OLAP  
+- ELT y enfoques relacionados  
+- Diagramas y ejemplos SQL  
+- Glosario y ejercicio breve  
+
+El capítulo está disponible en:
+
+```
+01-resumenes/04-etl-y-relacionados.md
+```
+
+Además, el capítulo incluye un ejemplo práctico complementario con carga de datos, dimensiones, hechos y uso de `MERGE` en SQL Server:
+
+```
+01-resumenes/04.1-etl-y-relacionados.md
+```
+
+---
+
 ## Bibliografía recomendada
 
 **Silberschatz, Abraham; Korth, Henry; Sudarshan, S. — *Database System Concepts*.**  
