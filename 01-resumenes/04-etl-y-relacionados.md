@@ -66,10 +66,30 @@ La carga puede hacerse de forma:
 
 ```mermaid
 flowchart LR
-    A[Fuentes de datos] --> B[Extract]
-    B --> C[Transform]
-    C --> D[Load]
-    D --> E[Data Warehouse]
+    subgraph Fuentes[Fuentes de datos]
+        A1[Base transaccional]
+        A2[Archivos planos]
+        A3[API / servicios web]
+    end
+
+    subgraph ETL[Proceso ETL]
+        B[Extract]
+        C[Transform]
+        D[Load]
+    end
+
+    subgraph Destino[Destino analítico]
+        E[Data Warehouse]
+        F[OLAP / reportes]
+    end
+
+    A1 --> B
+    A2 --> B
+    A3 --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
 ```
 
 Este flujo puede visualizarse como una secuencia lógica: primero se reúnen los datos, luego se limpian y reorganizan, y finalmente se almacenan en un repositorio analítico preparado para consultas.
