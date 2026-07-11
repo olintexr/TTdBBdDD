@@ -1,4 +1,3 @@
----
 
 # ETL y relacionados  
 ## Capítulo 4 — Tópicos de Bases de Datos
