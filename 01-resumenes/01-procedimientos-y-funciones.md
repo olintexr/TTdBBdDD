@@ -23,8 +23,8 @@ A continuación se presentan los conceptos esenciales que un estudiante debe dom
 
 ## 2.1 Procedimiento almacenado (Stored Procedure)
 
-Un **procedimiento almacenado** es un programa guardado dentro de la base de datos.  
-Puede ejecutar múltiples instrucciones SQL, recibir parámetros, manejar errores, realizar validaciones y modificar datos.
+Un **procedimiento almacenado** es un bloque de código SQL precompilado que se guarda dentro de la base de datos.  
+Puede recibir parámetros, devolver resultados, ejecutar operaciones complejas y trabajar con transacciones mediante bloques TRY/CATCH, COMMIT y ROLLBACK. También puede invocarse desde una aplicación mediante controladores como ODBC o JDBC, desde la misma base de datos con comandos como EXEC o CALL, o desde otros procedimientos, funciones y triggers. Su uso es común para encapsular la lógica de negocio, controlar permisos de ejecución y mantener la consistencia del código y de los datos en tareas repetitivas.
 
 Características principales:
 

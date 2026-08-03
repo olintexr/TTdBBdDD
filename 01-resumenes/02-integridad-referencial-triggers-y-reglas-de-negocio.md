@@ -214,26 +214,32 @@ GO
 
 ## 6. Explicación de triggers e inserted/deleted
 
+Los triggers (disparadores) son procedimientos que se ejecutan automáticamente en respuesta a ciertos eventos sobre una tabla, como `INSERT`, `UPDATE` o `DELETE`. Su propósito principal suele ser auditar cambios, validar reglas de negocio o evitar operaciones no deseadas.
+
+En SQL Server, los triggers pueden ser de tipo `AFTER` (se ejecutan después del evento) o `INSTEAD OF` (se ejecutan en lugar del evento). En otros manejadores, el concepto es similar, aunque la sintaxis cambia: por ejemplo, en MySQL se suelen declarar como `BEFORE INSERT`, `AFTER UPDATE`, etc., y en PostgreSQL pueden asociarse a eventos de tabla o de fila, incluso sobre vistas.
+
+Algunas características importantes de los triggers son:
+
+- No se llaman manualmente; se ejecutan automáticamente cuando ocurre el evento.
+- No importa si la modificación proviene de una aplicación o de la misma base de datos, el trigger se dispara igualmente.
+- Pueden deshabilitarse cuando sea necesario.
+- Son útiles para generar auditoría, validar reglas de negocio o prevenir operaciones que no deben permitirse.
+- Si se usan en exceso, pueden afectar el rendimiento si no se administran correctamente.
+
+Dentro de un trigger en SQL Server, el motor expone dos tablas virtuales:
+
+- `inserted`: contiene las filas nuevas en un `INSERT` o los valores nuevos en un `UPDATE`.
+- `deleted`: contiene las filas eliminadas en un `DELETE` o los valores anteriores en un `UPDATE`.
+
+En un `INSERT` solo existe `inserted`; en un `DELETE` solo existe `deleted`; y en un `UPDATE` existen ambas tablas, porque se comparan los valores anteriores y los nuevos.
+
+> Importante: SQL Server procesa las operaciones por conjuntos, por lo que los triggers deben diseñarse pensando en varias filas, no solo en una.
+
 ```sql
 /*
-Un trigger es un objeto que SQL Server ejecuta automáticamente cuando ocurre un INSERT, UPDATE o DELETE sobre una tabla. 
-Dentro del trigger, el motor expone dos tablas virtuales: inserted y deleted. 
-Estas no existen físicamente, pero contienen las filas afectadas por la operación. 
-En un INSERT, inserted trae las filas nuevas; en un DELETE, deleted trae las filas eliminadas; 
-En un UPDATE, deleted contiene los valores anteriores mientras inserted contiene los valores nuevos. 
-Como SQL Server procesa operaciones por conjuntos, ambas pueden tener varias filas, 
-y por eso los triggers deben escribirse siempre pensando en conjuntos y no en una sola fila.
-
--- Evento: este trigger se ejecuta cuando ocurre un INSERT, UPDATE o DELETE,
--- según cómo haya sido definido.
---
--- Tablas virtuales disponibles dentro del trigger:
---   inserted : contiene las filas nuevas (INSERT) o los valores nuevos (UPDATE).
---   deleted  : contiene las filas eliminadas (DELETE) o los valores anteriores (UPDATE).
---
--- En INSERT solo existe inserted.
--- En DELETE solo existe deleted.
--- En UPDATE existen ambas: deleted = valores viejos, inserted = valores nuevos.
+Ejemplo conceptual de uso de las tablas virtuales:
+- inserted: filas nuevas o valores nuevos.
+- deleted: filas eliminadas o valores anteriores.
 */
 ```
 
